@@ -2154,7 +2154,7 @@ var torbutton_resizelistener =
               getService(Ci.nsIStringBundleService);
             let bundle = sbSvc.
               createBundle("chrome://global/locale/commonDialogs.properties");
-            let button_label = bundle.GetStringFromName("OK");
+            let button_label = "Restore";
 
             let buttons = [{
               label: button_label,
@@ -2164,6 +2164,7 @@ var torbutton_resizelistener =
                 function() {
                   m_tb_prefs.setIntPref("extensions.torbutton.maximize_warnings_remaining",
                   m_tb_prefs.getIntPref("extensions.torbutton.maximize_warnings_remaining") - 1);
+                  window.resizeTo(m_tb_window_width,m_tb_window_height);
                 }
             }];
 
@@ -2212,6 +2213,73 @@ var torbutton_resizelistener =
   onStatusChange: function(aProgress, aRequest, stat, message) {},
   onSecurityChange: function() {}
 };
+
+var  resizeCount = 0;
+
+window.addEventListener("resize", function () {
+  // Do not add another notification if one is already showing.
+  torbutton_log(3, "resized new window log m_tb_window_height - " + m_tb_window_height + " and m_tb_window_width - " + m_tb_window_width + ", window.outerHeight - " + window.outerHeight + " and window.outerWidth - " + window.outerWidth);    
+  if( resizeCount < 2) {
+    resizeCount++;
+    m_tb_window_height = window.outerHeight;
+    m_tb_window_width = window.outerWidth;
+    return;
+  }
+
+if(window.outerHeight != m_tb_window_height || window.outerWidth != m_tb_window_width) {
+  if (m_tb_prefs.
+    getIntPref("extensions.torbutton.maximize_warnings_remaining") > 0) {
+
+              const kNotificationName = "torbutton-maximize-notification";
+              let box = gBrowser.getNotificationBox();
+              if (box.getNotificationWithValue(kNotificationName))
+                return;
+  
+              // Rate-limit showing our notification if needed.
+              if (m_tb_resize_date === null) {
+                m_tb_resize_date = Date.now();
+              } else {
+                // We wait at least another second before we show a new
+                // notification. Should be enough to rule out OSes that call our
+                // handler rapidly due to internal workings.
+                if (Date.now() - m_tb_resize_date < 1000) {
+                  return;
+                }
+                // Resizing but we need to reset |m_tb_resize_date| now.
+                m_tb_resize_date = Date.now();
+              }
+  
+              let sb = torbutton_get_stringbundle();
+              // No need to get "OK" translated again.
+              let sbSvc = Cc["@mozilla.org/intl/stringbundle;1"].
+                getService(Ci.nsIStringBundleService);
+              let bundle = sbSvc.
+                createBundle("chrome://global/locale/commonDialogs.properties");
+              let button_label = "Restore";
+  
+              let buttons = [{
+                label: button_label,
+                accessKey: 'O',
+                popup: null,
+                callback:
+                  function() {
+                    m_tb_prefs.setIntPref("extensions.torbutton.maximize_warnings_remaining",
+                    m_tb_prefs.getIntPref("extensions.torbutton.maximize_warnings_remaining") - 1);
+                    window.resizeTo(m_tb_window_width,m_tb_window_height);
+  
+                  }
+              }];
+  
+              let priority = box.PRIORITY_WARNING_LOW;
+              let message =
+                torbutton_get_property_string("torbutton.maximize_warning");
+  
+             box.appendNotification(message, kNotificationName, null,
+                                   priority, buttons);
+              return;
+             }
+            }
+            });
 
 function torbutton_http_connection_observed(aRequest, aData) {
   // If we are loading an HTTP page from content, show the
